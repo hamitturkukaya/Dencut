@@ -4,8 +4,8 @@ class Graph
     @edges = (0..node_count).to_a.map { Array.new(node_count, false) }
   end
 
-  def add_edge(source, dest)
+  def add_edge(source, dest, directed = false)
     @edges[source][dest] = true
-    @edges[dest][source] = true
+    @edges[dest][source] = true unless directed
   end
 end
