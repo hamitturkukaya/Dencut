@@ -1,50 +1,25 @@
-require_relative 'config'
+require_relative 'base_node'
 
-class Node
-  attr_reader :neighbours, :states, :low, :parent, :depth, :root, :cut_vertex, :id
+class Node < BaseNode
+  attr_reader :neighbours, :states, :low, :depth, :cut_vertex
 
   def initialize(id)
-    @semaphore = Mutex.new
-    @id = id
+    super(id)
     @neighbours = GRAPH.edges[@id]
     @states = GRAPH.edges[@id].map{|x| x ? States::UNVISITED : -1}
     @low = 999
-    @parent = nil
     @depth = 999
-    @root = false
     @cut_vertex = false
     @neighbour_count = @neighbours.select{|n| n}.count
-    @completed = false
-    @log_enabled = true
   end
 
   def start_operation
-    time = 0.0
-    until @completed
-      sleep 0.5
-      time += 0.5
-      if MESSAGE_QUEUE[@id].size > 0
-        @semaphore.lock
-        message = MESSAGE_QUEUE[@id].pop(non_block=true)
-        @semaphore.unlock
-        time = 0
-        puts message.receive_format(@id) if @log_enabled
-        message_received(message)
-      end
-      @completed = time >= 5
-      report_to_sink  if @completed && @root
-    end
-
+    listen_proc   = Proc.new {|message| message_received(message)}
+    complete_proc = Proc.new {report_to_sink}
+    listen_message(listen_proc, complete_proc)
   end
 
   private
-
-  def send_message(message = Message.new, overhear = nil)
-    @semaphore.lock
-      puts message.send_format(overhear || message.destination) if @log_enabled
-      MESSAGE_QUEUE[overhear || message.destination] << message
-    @semaphore.unlock
-  end
 
   def message_received(message = Message.new)
     destination = message.destination
@@ -118,11 +93,6 @@ class Node
       end
       @completed = true
     end
-  end
-
-  def send_finish
-    message = Message.new(message_type: Messages::FINISH, source: @id, destination: @parent)
-    send_message(message)
   end
 
   def report_to_sink
